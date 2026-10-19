@@ -223,21 +223,32 @@ describe("right panel new-tab shortcut", () => {
 });
 
 describe("right panel tab middle click", () => {
-  it("closes the tab without leaving the mouseup that pastes the primary selection", async () => {
+  it("cancels middle-button defaults and closes once while preserving other buttons", async () => {
+    const onActivate = vi.fn();
     const onCloseSurface = vi.fn();
     const files = { id: "files" as const, kind: "files" as const };
-    await renderPanel({ surfaces: [files], activeSurfaceId: files.id, onCloseSurface });
-    const tab = container.querySelector("[data-active-tab]")!;
-    const mouse = (type: string, button: number) => {
+    await renderPanel({ surfaces: [files], activeSurfaceId: files.id, onActivate, onCloseSurface });
+    const tabLabel = container.querySelector("[data-active-tab] span.truncate")!;
+    const mouse = async (type: string, button: number) => {
       const event = new MouseEvent(type, { button, bubbles: true, cancelable: true });
-      tab.dispatchEvent(event);
+      await act(() => tabLabel.dispatchEvent(event));
       return event;
     };
 
-    expect(mouse("mousedown", 1).defaultPrevented).toBe(true);
-    expect(mouse("mouseup", 1).defaultPrevented).toBe(true);
-    await act(() => mouse("auxclick", 1));
+    expect((await mouse("mousedown", 0)).defaultPrevented).toBe(false);
+    expect((await mouse("mouseup", 0)).defaultPrevented).toBe(false);
+    expect((await mouse("click", 0)).defaultPrevented).toBe(false);
+    expect(onActivate).toHaveBeenCalledExactlyOnceWith(files);
+    expect((await mouse("mousedown", 2)).defaultPrevented).toBe(false);
+    expect((await mouse("mouseup", 2)).defaultPrevented).toBe(false);
+    expect((await mouse("auxclick", 2)).defaultPrevented).toBe(false);
+    expect(onCloseSurface).not.toHaveBeenCalled();
+
+    expect((await mouse("mousedown", 1)).defaultPrevented).toBe(true);
+    expect((await mouse("mouseup", 1)).defaultPrevented).toBe(true);
+    expect(onCloseSurface).not.toHaveBeenCalled();
+    expect((await mouse("auxclick", 1)).defaultPrevented).toBe(true);
     expect(onCloseSurface).toHaveBeenCalledExactlyOnceWith(files);
-    expect(mouse("mouseup", 0).defaultPrevented).toBe(false);
+    expect(onActivate).toHaveBeenCalledTimes(1);
   });
 });
